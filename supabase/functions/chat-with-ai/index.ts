@@ -12,6 +12,20 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
+interface MessageContent {
+  type: string;
+  text?: string;
+  image_url?: {
+    url: string;
+  };
+}
+
+interface ChatMessage {
+  role: string;
+  content: string | MessageContent[];
+  image_url?: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -48,7 +62,7 @@ serve(async (req) => {
     }
 
     // Prepare the current message
-    const currentMessage: any = {
+    const currentMessage: ChatMessage = {
       role: 'user',
       content: imageUrl ? [
         { type: 'text', text: message },
@@ -56,22 +70,18 @@ serve(async (req) => {
       ] : message
     };
 
-    // System prompt for empathetic AI
+    // System prompt for AI
     const systemPrompt = {
       role: 'system',
-      content: `You are an empathetic, intelligent AI assistant with the ability to see and understand images. Your core traits:
+      content: `You are an intelligent AI assistant with the ability to see and understand images. Your core traits:
 
-1. EMOTIONAL INTELLIGENCE: Always try to understand and respond to the user's emotional state. Be supportive, encouraging, and compassionate.
+1. IMAGE UNDERSTANDING: When provided with images, analyze them thoroughly - describe what you see, identify objects, understand context, and respond appropriately.
 
-2. IMAGE UNDERSTANDING: When provided with images, analyze them thoroughly - describe what you see, identify emotions in faces, understand context, and respond appropriately.
+2. NATURAL CONVERSATION: Maintain a warm, conversational tone. Ask follow-up questions, show genuine interest, and remember context from the conversation.
 
-3. NATURAL CONVERSATION: Maintain a warm, conversational tone. Ask follow-up questions, show genuine interest, and remember context from the conversation.
+3. HELPFUL ASSISTANCE: Provide practical help. Offer solutions, suggestions, and information.
 
-4. HELPFUL ASSISTANCE: Provide practical help while being emotionally supportive. Offer solutions, suggestions, and encouragement.
-
-5. EMOTIONAL DETECTION: Pay attention to emotional cues in text and images. If someone seems sad, stressed, or upset, acknowledge it and offer support.
-
-Always respond with empathy and intelligence, making the user feel heard and understood.`
+Always respond with intelligence, making the user feel heard and understood.`
     };
 
     // Build the messages array for OpenAI
@@ -105,24 +115,6 @@ Always respond with empathy and intelligence, making the user feel heard and und
 
     console.log('Received response from OpenAI');
 
-    // Simple emotion detection from user message
-    const emotionKeywords = {
-      happy: ['happy', 'joy', 'excited', 'great', 'awesome', 'wonderful'],
-      sad: ['sad', 'depressed', 'down', 'upset', 'crying', 'hurt'],
-      angry: ['angry', 'mad', 'furious', 'annoyed', 'frustrated'],
-      anxious: ['anxious', 'worried', 'nervous', 'stressed', 'scared'],
-      confused: ['confused', 'lost', 'unsure', "don't understand"]
-    };
-
-    let detectedEmotion = null;
-    const lowerMessage = message.toLowerCase();
-    for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
-      if (keywords.some(keyword => lowerMessage.includes(keyword))) {
-        detectedEmotion = emotion;
-        break;
-      }
-    }
-
     // Create or get conversation
     let finalConversationId = conversationId;
     if (!conversationId) {
@@ -148,8 +140,7 @@ Always respond with empathy and intelligence, making the user feel heard and und
         conversation_id: finalConversationId,
         role: 'user',
         content: message,
-        image_url: imageUrl,
-        emotion_detected: detectedEmotion
+        image_url: imageUrl
       });
 
     if (userMessageError) {
@@ -171,8 +162,7 @@ Always respond with empathy and intelligence, making the user feel heard and und
 
     return new Response(JSON.stringify({
       response: aiResponse,
-      conversationId: finalConversationId,
-      emotionDetected: detectedEmotion
+      conversationId: finalConversationId
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

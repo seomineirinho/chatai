@@ -1,6 +1,6 @@
 
-import React, { useState, useRef } from 'react';
-import { Send, Image, X, Loader2 } from 'lucide-react';
+import React, { useState, useRef, ChangeEvent } from 'react';
+import { Send, Image, WifiOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -8,42 +8,63 @@ import { cn } from '@/lib/utils';
 interface ChatInputProps {
   onSendMessage: (message: string, imageFile?: File) => void;
   isLoading: boolean;
+  isDisabled?: boolean;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ 
+  onSendMessage, 
+  isLoading,
+  isDisabled = false 
+}) => {
   const [message, setMessage] = useState('');
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSend = () => {
-    if (!message.trim() && !selectedImage) return;
-    
-    onSendMessage(message.trim() || 'Please analyze this image', selectedImage || undefined);
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (message.trim() === '' && !imageFile) return;
+
+    onSendMessage(message, imageFile || undefined);
     setMessage('');
-    setSelectedImage(null);
+    setImageFile(null);
     setImagePreview(null);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
     }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size should not exceed 5MB');
+      return;
+    }
+
+    setImageFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const removeImage = () => {
-    setSelectedImage(null);
+  const handleRemoveImage = () => {
+    setImageFile(null);
     setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -51,72 +72,82 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
   };
 
   return (
-    <div className="border-t border-border/50 bg-background/80 backdrop-blur-sm p-4">
+    <div className={cn(
+      "border-t border-border/50 bg-background/80 backdrop-blur-sm p-4",
+      isDisabled && "opacity-60"
+    )}>
+      {/* Image preview */}
       {imagePreview && (
-        <div className="mb-3 relative inline-block">
+        <div className="mb-3 relative w-24 h-24">
           <img 
             src={imagePreview} 
             alt="Selected" 
-            className="max-w-32 max-h-32 rounded-lg border border-border"
+            className="w-24 h-24 object-cover rounded-md border border-border"
           />
-          <Button
-            size="sm"
+          <Button 
+            onClick={handleRemoveImage} 
+            size="sm" 
             variant="destructive"
-            className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
-            onClick={removeImage}
+            className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full"
           >
-            <X className="w-3 h-3" />
+            ✕
           </Button>
         </div>
       )}
-      
-      <div className="flex gap-2 items-end">
-        <div className="flex-1">
+
+      {/* Input area */}
+      <div className="flex gap-2">
+        <div className="relative flex-1 overflow-hidden">
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
-            className="min-h-[60px] max-h-32 resize-none border-border/50 focus:border-primary/50"
-            disabled={isLoading}
+            onKeyDown={handleTextareaKeyDown}
+            placeholder={isDisabled ? "Connection lost. Reconnecting..." : "Type a message..."}
+            className="min-h-[50px] max-h-[200px] resize-none pr-10"
+            disabled={isLoading || isDisabled}
           />
+          <label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              className="hidden"
+              disabled={isLoading || isDisabled}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              type="button"
+              className="absolute right-2 bottom-2 h-6 w-6"
+              disabled={isLoading || isDisabled}
+            >
+              <Image className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </label>
         </div>
-        
-        <div className="flex flex-col gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageSelect}
-            className="hidden"
-          />
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
-            className="w-12 h-12"
-          >
-            <Image className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            onClick={handleSend}
-            disabled={isLoading || (!message.trim() && !selectedImage)}
-            className={cn(
-              "w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700",
-              "shadow-lg hover:shadow-xl transition-all duration-200"
-            )}
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
+
+        <Button 
+          onClick={handleSendMessage}
+          disabled={(!message.trim() && !imageFile) || isLoading || isDisabled}
+          className="min-h-[50px] px-4"
+        >
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : isDisabled ? (
+            <WifiOff className="h-5 w-5" />
+          ) : (
+            <Send className="h-5 w-5" />
+          )}
+        </Button>
       </div>
+
+      {isDisabled && (
+        <div className="flex items-center justify-center mt-3 text-sm text-amber-600 dark:text-amber-400">
+          <WifiOff className="h-4 w-4 mr-2" /> 
+          Connection lost. Please wait for reconnection or refresh the page.
+        </div>
+      )}
     </div>
   );
 };

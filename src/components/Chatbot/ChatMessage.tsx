@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bot, User, Heart, Frown, Smile, Meh, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +35,50 @@ const EmotionIcon = ({ emotion }: { emotion?: string }) => {
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const isUser = message.role === 'user';
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isFullyDisplayed, setIsFullyDisplayed] = useState(isUser); // User messages show immediately
+  
+  // Simulate typing effect for AI messages
+  useEffect(() => {
+    if (isUser) {
+      setDisplayedText(message.content);
+      return;
+    }
+    
+    // Reset state when message changes
+    setDisplayedText('');
+    setIsFullyDisplayed(false);
+    
+    if (!message.content) return;
+    
+    // Calculate typing speed based on content length
+    // Shorter response = faster typing, longer = slightly slower
+    const baseSpeed = 15; // base ms per character
+    const speedFactor = Math.max(1, Math.min(3, message.content.length / 500));
+    const typingSpeed = baseSpeed * speedFactor;
+    
+    let currentIndex = 0;
+    setIsTyping(true);
+    
+    // Start typing effect with a small initial delay
+    const typingTimer = setTimeout(() => {
+      const intervalId = setInterval(() => {
+        if (currentIndex < message.content.length) {
+          setDisplayedText(message.content.substring(0, currentIndex + 1));
+          currentIndex++;
+        } else {
+          setIsTyping(false);
+          setIsFullyDisplayed(true);
+          clearInterval(intervalId);
+        }
+      }, typingSpeed);
+      
+      return () => clearInterval(intervalId);
+    }, 300);
+    
+    return () => clearTimeout(typingTimer);
+  }, [message.content, isUser]);
   
   return (
     <div className={cn(
@@ -64,10 +108,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         )}
         
         <div className="whitespace-pre-wrap text-sm leading-relaxed">
-          {message.content}
+          {displayedText}
+          {isTyping && (
+            <span className="inline-block animate-pulse">▊</span>
+          )}
         </div>
         
-        {message.emotion_detected && (
+        {isFullyDisplayed && message.emotion_detected && (
           <div className="mt-2 pt-2 border-t border-border/20">
             <EmotionIcon emotion={message.emotion_detected} />
           </div>

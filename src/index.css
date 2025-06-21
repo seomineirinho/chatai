@@ -104,11 +104,27 @@
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(-10px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+    }
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background-color: currentColor;
+    margin-left: 2px;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    from, to {
+      opacity: 0;
+    }
+    50% {
+      opacity: 1;
     }
   }
 }
