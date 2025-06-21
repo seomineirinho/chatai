@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Brain, Heart } from 'lucide-react';
+import { Loader2, Brain, Heart, Users } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ConversationList from './ConversationList';
@@ -28,6 +28,7 @@ interface Conversation {
 const EmpatheticChatbot: React.FC = () => {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<number>(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -55,6 +56,94 @@ const EmpatheticChatbot: React.FC = () => {
     },
     enabled: !!currentConversationId,
   });
+
+  // Real-time subscriptions for messages
+  useEffect(() => {
+    if (!currentConversationId) return;
+
+    const channel = supabase
+      .channel(`conversation-${currentConversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${currentConversationId}`
+        },
+        (payload) => {
+          console.log('New message received:', payload);
+          const newMessage = payload.new as Message;
+          setMessages(prev => {
+            // Avoid duplicates
+            if (prev.some(msg => msg.id === newMessage.id)) {
+              return prev;
+            }
+            return [...prev, newMessage];
+          });
+          
+          // Show notification for new AI responses
+          if (newMessage.role === 'assistant') {
+            toast({
+              title: "AI Response",
+              description: "New response received! 🤖",
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${currentConversationId}`
+        },
+        (payload) => {
+          console.log('Message updated:', payload);
+          const updatedMessage = payload.new as Message;
+          setMessages(prev => 
+            prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentConversationId, toast]);
+
+  // Real-time presence tracking
+  useEffect(() => {
+    const channel = supabase.channel('online-users');
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState();
+        const users = Object.keys(newState).length;
+        setOnlineUsers(users);
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('User joined:', key, newPresences);
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('User left:', key, leftPresences);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          const presenceTrackStatus = await channel.track({
+            user: `user-${Date.now()}`,
+            online_at: new Date().toISOString(),
+          });
+          console.log('Presence tracking:', presenceTrackStatus);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Update local messages when query data changes
   useEffect(() => {
@@ -113,9 +202,8 @@ const EmpatheticChatbot: React.FC = () => {
         setCurrentConversationId(data.conversationId);
       }
 
-      // Refresh conversations list and messages
+      // Refresh conversations list
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['messages', data.conversationId] });
 
       if (data.emotionDetected) {
         toast({
@@ -161,18 +249,27 @@ const EmpatheticChatbot: React.FC = () => {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="border-b border-border/50 bg-background/80 backdrop-blur-sm p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-full flex items-center justify-center">
-              <Brain className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-full flex items-center justify-center">
+                <Brain className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Empathic AI Assistant
+                </h1>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Heart className="w-3 h-3" />
+                  Understanding images and emotions
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Empathic AI Assistant
-              </h1>
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <Heart className="w-3 h-3" />
-                Understanding images and emotions
-              </p>
+            
+            {/* Online Users Indicator */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Users className="w-4 h-4" />
+              <span>{onlineUsers} online</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             </div>
           </div>
         </div>
