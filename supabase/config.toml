@@ -1,1 +1,8 @@
+
 project_id = "bqswsdqyngaylljndahp"
+
+[functions.chat-with-ai]
+verify_jwt = false
+
+[functions.get-conversations]
+verify_jwt = false
