@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +7,7 @@ import { Loader2, Brain, Heart, Users } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ConversationList from './ConversationList';
+import RealtimeStatus from './RealtimeStatus';
 
 interface Message {
   id: string;
@@ -265,11 +265,14 @@ const EmpatheticChatbot: React.FC = () => {
               </div>
             </div>
             
-            {/* Online Users Indicator */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Users className="w-4 h-4" />
-              <span>{onlineUsers} online</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            {/* Status indicators */}
+            <div className="flex items-center gap-4">
+              <RealtimeStatus />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="w-4 h-4" />
+                <span>{onlineUsers} online</span>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              </div>
             </div>
           </div>
         </div>
